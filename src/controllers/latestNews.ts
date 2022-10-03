@@ -19,7 +19,13 @@ export const deleteLatestNews: RequestHandler = async (req, res, next) => {
 export const getLatestNews: RequestHandler = async (req, res, next) => {
   const latestNews = await LatestNews.find();
 
-  res.json({ latestNews: latestNews, count: latestNews.length });
+  res.json({
+    latestNews: latestNews.sort(
+      (a, b) =>
+        new Date(a.createdDate).valueOf() - new Date(b.createdDate).valueOf()
+    ),
+    count: latestNews.length,
+  });
 };
 
 export const postLatestNews: RequestHandler = async (req, res, next) => {
@@ -167,7 +173,17 @@ export const deleteNews: RequestHandler = async (req, res, next) => {
 
 export const likeNews: RequestHandler = async (req, res, next) => {
   try {
-    const { id, newsId } = req.body;
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+    const { id } = req.body;
+    const newsId = req.params.newsId;
+    const news = await LatestNews.findById(newsId).exec();
+
+    if (!news) {
+      return next(new HttpError("There is a problem with the news Id", 400));
+    }
 
     const user = await User.findById(id).exec();
 
@@ -175,11 +191,24 @@ export const likeNews: RequestHandler = async (req, res, next) => {
       return next(new HttpError(translations.userIdNotFound, 400));
     }
 
+    const alreadyLikedNews = await LatestNews.find({
+      $and: [{ id: newsId }, { likedUsers: { $in: [user.id] } }],
+    });
+
+    if (alreadyLikedNews.length > 0) {
+      await LatestNews.findByIdAndUpdate(newsId, {
+        $pull: { likedUsers: id },
+      }).exec();
+
+      res.status(200).json({ liked: false });
+      return;
+    }
+
     await LatestNews.findByIdAndUpdate(newsId, {
       $push: { likedUsers: id },
     }).exec();
 
-    res.status(204).send();
+    res.status(200).json({ liked: true });
   } catch (error) {
     next(error);
   }
@@ -187,7 +216,17 @@ export const likeNews: RequestHandler = async (req, res, next) => {
 
 export const makeNewsFav: RequestHandler = async (req, res, next) => {
   try {
-    const { id, newsId } = req.body;
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+    const { id } = req.body;
+    const newsId = req.params.newsId;
+    const news = await LatestNews.findById(newsId).exec();
+
+    if (!news) {
+      return next(new HttpError("There is a problem with the news Id", 400));
+    }
 
     const user = await User.findById(id).exec();
 
@@ -195,11 +234,45 @@ export const makeNewsFav: RequestHandler = async (req, res, next) => {
       return next(new HttpError(translations.userIdNotFound, 400));
     }
 
+    const alreadyFavNews = await LatestNews.find({
+      $and: [{ id: newsId }, { favUsers: { $in: [user.id] } }],
+    });
+
+    if (alreadyFavNews.length > 0) {
+      await LatestNews.findByIdAndUpdate(newsId, {
+        $pull: { favUsers: id },
+      }).exec();
+
+      res.status(200).json({ fav: false });
+      return;
+    }
+
     await LatestNews.findByIdAndUpdate(newsId, {
       $push: { favUsers: id },
     }).exec();
 
-    res.status(204).send();
+    res.status(200).json({ fav: true });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getFavAndLikedNews: RequestHandler = async (req, res, next) => {
+  try {
+    const { id } = req.body;
+
+    const user = await User.findById(id).exec();
+
+    if (!user) {
+      return next(new HttpError(translations.userIdNotFound, 400));
+    }
+
+    const likedResult = await LatestNews.find({
+      likedUsers: { $in: [id] },
+    }).exec();
+    const favResult = await LatestNews.find({ favUsers: { $in: [id] } }).exec();
+
+    res.status(200).json({ likedNews: likedResult, favNews: favResult });
   } catch (error) {
     next(error);
   }

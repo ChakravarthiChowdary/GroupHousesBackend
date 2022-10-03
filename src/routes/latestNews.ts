@@ -5,8 +5,11 @@ import dotenv from "dotenv";
 import {
   deleteLatestNews,
   deleteNews,
+  getFavAndLikedNews,
   getLatestNews,
   getMyPosts,
+  likeNews,
+  makeNewsFav,
   postLatestNews,
   uploadNewsImage,
 } from "../controllers/latestNews";
@@ -33,6 +36,12 @@ router.post(
 );
 
 router.delete("/:newsId", deleteNews);
+
+router.post("/like/:newsId", likeNews);
+
+router.post("/fav/:newsId", makeNewsFav);
+
+router.get("/likeandfavnews", getFavAndLikedNews);
 
 if (process.env.NODE_ENV === "development") {
   router.delete("/", deleteLatestNews);
